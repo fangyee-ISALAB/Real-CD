@@ -1,0 +1,10 @@
+MODEL:
+  ADAPTATION: cmf
+OPTIM:
+  BETA: 0.99
+  LR: 1e-4
+  METHOD: Adam
+  STEPS: 1
+  WD: 0.0
+TEST:
+  BATCH_SIZE: 4

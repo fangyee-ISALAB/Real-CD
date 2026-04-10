@@ -1,0 +1,15 @@
+MODEL:
+  ADAPTATION: ttta
+OPTIM:
+  BETA: 0.99
+  LR: 1e-4
+  METHOD: Adam
+  STEPS: 1
+  WD: 0.0
+TEST:
+  BATCH_SIZE: 4
+TTTA:
+  SCALE: 1
+  RESET_EMA: 0.23
+  LR_VIDA: 1e-4
+  WD_VIDA: 0.0

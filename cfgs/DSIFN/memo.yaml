@@ -1,0 +1,20 @@
+CORRUPTION:
+  DATASET: ccc
+  SEVERITY:
+    - 5
+  TYPE:
+    - baseline_20_transition+speed_1000_seed_44
+MODEL:
+  ADAPTATION: memo
+  ARCH: resnet50
+  EPISODIC: True
+OPTIM:
+  BETA: 0.99
+  LR: 1e-4
+  METHOD: Adam
+  STEPS: 1
+  WD: 0.0
+TEST:
+  BATCH_SIZE: 4
+  WINDOW_LENGTH: 1
+  N_AUGMENTATIONS: 64

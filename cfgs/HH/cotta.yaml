@@ -1,0 +1,16 @@
+MODEL:
+  ADAPTATION: cotta
+  ARCH: resnet50
+OPTIM:
+  BETA: 0.99
+  LR: 1e-4
+  METHOD: Adam
+  STEPS: 1
+  WD: 0.0
+M_TEACHER:
+  MOMENTUM: 0.999
+COTTA:
+  RST: 0.001
+  AP: 0.1
+TEST:
+  BATCH_SIZE: 4

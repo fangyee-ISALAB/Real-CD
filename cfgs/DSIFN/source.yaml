@@ -1,0 +1,5 @@
+MODEL:
+  ADAPTATION: source
+  ARCH: resnet50
+TEST:
+  BATCH_SIZE: 4

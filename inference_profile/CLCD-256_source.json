@@ -1,0 +1,12 @@
+{
+    "total_images": 480,
+    "batch_size_avg": 4.0,
+    "total_inference_time_sec": 13.215219,
+    "avg_time_per_image_sec": 0.027532,
+    "min_time_per_batch_sec": 0.081525,
+    "max_time_per_batch_sec": 3.306133,
+    "std_time_per_batch_sec": 0.294219,
+    "fps": 36.32,
+    "max_gpu_memory_MB": 1496.65,
+    "avg_gpu_memory_MB": 317.45
+}
