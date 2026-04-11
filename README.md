@@ -20,7 +20,8 @@ pip install -r requirements.txt
 ## step2: Our Change Detection Benchmark :
 
 Our simulated benchmark based on DSIFN, SYSU, and CLCD is available at:
-👉 Benchmark Dataset Link <!-- 替换为真实链接 -->
+👉 Benchmark Dataset Link <!--通过网盘分享的文件：Real-CD-ckpt
+链接: https://pan.baidu.com/s/1vaRLaHhK-NcDmb0zJOEzTw?pwd=91nq 提取码: 91nq-->
 
 ## step3: Model Training:
 
