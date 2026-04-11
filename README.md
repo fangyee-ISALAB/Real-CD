@@ -32,7 +32,7 @@ bash scripts/run_train_ChangeFormer_xxx.sh
 ```
 
 We provide pretrained checkpoints for quick reproduction:
-👉 [Pretrained Checkpoints](https://pan.baidu.com/s/1vaRLaHhK-NcDmb0zJOEzTw?pwd=91nq 提取码: 91nq)
+👉 [Pretrained Checkpoints](https://pan.baidu.com/s/1vaRLaHhK-NcDmb0zJOEzTw?pwd=91nq)
 
 ## step4: Model Test Time Adaptation
 Our work is evaluated on our change detection datasets: DSIFN‑C, SYSU‑C, CLCD‑C.
