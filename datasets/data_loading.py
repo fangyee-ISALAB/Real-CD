@@ -10,7 +10,7 @@ import torchvision
 import torchvision.transforms as transforms
 
 from typing import Union
-from conf import complete_data_dir_path
+from cfgs.conf import complete_data_dir_path
 from datasets.imagelist_dataset import ImageList
 from datasets.imagenet_subsets import create_imagenet_subset
 from datasets.corruptions_datasets import create_cifarc_dataset, create_imagenetc_dataset

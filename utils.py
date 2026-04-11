@@ -3,7 +3,7 @@ import torch
 from torch.utils.data import DataLoader
 from torchvision import utils
 
-import data_config
+from datasets import data_config
 from datasets.CD_dataset import CDDataset
 
 

@@ -1,6 +1,6 @@
 from argparse import ArgumentParser
 from models.evaluator import *
-from conf import cfg, load_cfg_from_args
+from cfgs.conf import cfg, load_cfg_from_args
 import argparse
 print(torch.cuda.is_available())
 

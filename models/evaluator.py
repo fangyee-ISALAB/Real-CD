@@ -8,8 +8,6 @@ import utils
 import torch.optim as optim
 import matplotlib.pyplot as plt
 from helper.registry import ADAPTATION_REGISTRY
-from tta_methods.tent import Tent
-from misc.inference_profiler import InferenceProfiler
 
 
 class CDEvaluator():
@@ -187,15 +185,11 @@ class CDEvaluator():
         self.net_G = ADAPTATION_REGISTRY.get(cfg.MODEL.ADAPTATION)(cfg=cfg, model=self.net_G, num_classes=2)
         self.logger.write(f'\nTest time ADAPTATION is {cfg.MODEL.ADAPTATION}\n')
 
-        profiler = InferenceProfiler()
         for self.batch_id, batch in enumerate(self.dataloader, 0):
-            profiler.start_timer()
             with torch.no_grad():
                 self._forward_pass(batch)
                 torch.cuda.empty_cache()
-            profiler.stop_timer(batch_size=self.batch['L'].shape[0])
             self._collect_running_batch_states()
-        profiler.summary(f"{self.args.data_name}_{cfg.MODEL.ADAPTATION}")
         self._collect_epoch_states()
 
 

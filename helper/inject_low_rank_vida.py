@@ -62,39 +62,6 @@ class DWConv(nn.Module):
         return x
 
 
-class Cattn(nn.Module):
-    def __init__(self, in_features, hidden_features):
-        super().__init__()
-        hidden_features = hidden_features
-        self.vida_fc1 = nn.Linear(in_features, hidden_features)
-        self.vida_dwconv = DWConv(hidden_features)
-        self.vida_act = nn.GELU()
-        self.vida_fc2 = nn.Linear(hidden_features, in_features)
-        self.apply(self._init_weights)
-        # self.vida_last_act = nn.Tanh()
-    def _init_weights(self, m):
-        if isinstance(m, nn.Linear):
-            trunc_normal_(m.weight, std=.02)
-            if isinstance(m, nn.Linear) and m.bias is not None:
-                nn.init.constant_(m.bias, 0)
-        elif isinstance(m, nn.LayerNorm):
-            nn.init.constant_(m.bias, 0)
-            nn.init.constant_(m.weight, 1.0)
-        elif isinstance(m, nn.Conv2d):
-            fan_out = m.kernel_size[0] * m.kernel_size[1] * m.out_channels
-            fan_out //= m.groups
-            m.weight.data.normal_(0, math.sqrt(2.0 / fan_out))
-            if m.bias is not None:
-                m.bias.data.zero_()
-
-    def forward(self, x, H, W):
-        x = self.vida_fc1(x)
-        x = self.vida_dwconv(x, H, W)
-        x = self.vida_act(x)
-        x = self.vida_fc2(x)
-        # x = self.vida_last_act(x)
-        return x
-
 
 class ViDAInjectedLNormLayer(nn.Module):
     def __init__(self, cfg, oldLayerNorm, model_state_dict):
@@ -126,11 +93,6 @@ class ViDAInjectedLNormLayer(nn.Module):
             self.vida_proj2 = nn.Linear(self.in_features, self.in_features).to("cuda")
             self.vida_proj3 = nn.Linear(self.in_features, self.in_features).to("cuda")
 
-            # self.vida_proj1 = nn.Linear(self.in_features, int(self.in_features/4)).to("cuda")
-            # self.vida_proj2 = nn.Linear(self.in_features, int(self.in_features/4)).to("cuda")
-            # self.vida_proj3 = nn.Linear(self.in_features, int(self.in_features/4)).to("cuda")
-
-
     def get_logit(self, input, input2):
         B, N, C = input.shape
         input_mean = input.mean(1).unsqueeze(1)
@@ -160,10 +122,6 @@ class ViDAInjectedLNormLayer(nn.Module):
     def forward(self, input, input2=None):
         if input2 !=None and self.finetune_ln:
 
-            # diff_logit = self.get_diff(input, input2)
-            # conn_logit = self.vida_adaptive_avgpool(torch.concat((input.detach(), input2.detach()), dim=1))
-
-
             conn1_logit = self.get_logit(input, input2)
             conn2_logit = self.get_logit(input2, input)
             diff_logit = self.vida_proj1(input-input2)
@@ -173,15 +131,6 @@ class ViDAInjectedLNormLayer(nn.Module):
             input2_logit = self.vida_proj3(input2)
 
             logit = self.vida_adaptive_avgpool(torch.concat((input1_logit,  input2_logit, conn1_logit, conn2_logit,diff_logit), dim=1).detach().permute(0, 2, 1)).mean(0)
-
-            # diff_logit, conn_logit = self.get_logit(input, input2)
-            # diff_logit = self.vida_proj1(diff_logit
-
-            # conn_logit = self.vida_proj2(conn_logit)
-            # input1_logit BUTONG= self.vida_proj3(input)
-            # input2_logit = self.vida_proj3(input2)
-            # logit = self.vida_adaptive_avgpool(torch.concat((input1_logit, input2_logit, conn_logit, diff_logit), dim=-1).detach().permute(0, 2, 1)).mean(0)
-            # print(logit.shape)
 
             scale_scores = self.compute_vida_route1(logit)
             shift_router = self.compute_vida_route2(logit)
@@ -215,49 +164,6 @@ class ViDAInjectedLNormLayer(nn.Module):
                 return output1
 
 
-
-class ViDAInjectGatedLinear(nn.Module):
-    def __init__(self, cfg, in_features, out_feature, weight, bias):
-        super().__init__()
-        self.route_hidden_dim = cfg.TTTA.HIDDEN_DIM
-        self.dropout = cfg.TTTA.DROPOUT
-        self.out_dim2 = 64
-        self.in_features = in_features
-        self.vida_refine = Cattn(in_features, self.route_hidden_dim).to('cuda')
-        self.compute_vida_route = Vida_Router(1, self.route_hidden_dim, 2, self.dropout).to('cuda')
-        self.vida_softmax = F.gumbel_softmax
-        self.qkv = nn.Linear(in_features, out_feature).to('cuda')
-        self.qkv.weight.data = weight
-        self.qkv.bias.data = bias
-
-    def get_logit(self, input, input2):
-        B, N, C = input.shape
-        input_mean = input.mean(1).unsqueeze(1)
-        input_ = input_mean.repeat(1, N, 1)
-        dot_product = torch.sum(input2 * input_, dim=-1, keepdim=True)
-        norm1 = torch.norm(input_, dim=-1, keepdim=True)
-        norm2 = torch.norm(input2, dim=-1, keepdim=True)
-        csim = dot_product / (norm1 * norm2)
-        for i in range(B):
-            if csim[i].max() != csim[i].min():
-                csim_clone = csim[i].clone()
-                csim[i] = (csim_clone - csim_clone.min()) / (csim_clone.max() - csim_clone.min())
-        return csim
-
-    def forward(self, input, H, W, input2=None):
-        if input2 != None:
-            q1 = self.qkv(input)
-            refine_x2 = input2 + self.vida_refine(input2, H, W)
-            q2 = self.qkv(refine_x2)
-            csim = self.get_logit(input, refine_x2)
-            router = self.compute_vida_route(csim)
-            router = self.vida_softmax(router, hard=False, dim=-1)[:, :, 0]
-            return q1, q2, router
-        else:
-            return self.qkv(input)
-
-
-
 def inject_trainable_vida(model: nn.Module, cfg):
     """
     inject vida into model, and returns vida parameter groups.
@@ -265,49 +171,13 @@ def inject_trainable_vida(model: nn.Module, cfg):
 
     require_grad_params = []
     names = []
-    # target_replace_linear_module: List[str] = ["Attention"]
-    target_replace_linear_module: List[str] = []
     target_replace_norm_module: List[str] = ['OverlapPatchEmbed', 'EncoderTransformer_v3', 'Block']
-    # target_replace_norm_module: List[str] = ['OverlapPatchEmbed', 'EncoderTransformer_v3']
-    # target_replace_norm_module: List[str] = []
     all_vida_params = {}
 
     for mo_name, _module in list(model.named_modules()):
-        if _module.__class__.__name__ in target_replace_linear_module:
-            for name, _child_module in list(_module.named_modules()):
-                if 'q' in name and _child_module.__class__.__name__ == "Linear":
-                    if 'block3' in mo_name or 'block4' in mo_name or 'block2' in mo_name:
-                        continue
-                    print(f"{mo_name}_{name}")
-                    weight = _child_module.weight
-                    bias = _child_module.bias
-                    _tmp = ViDAInjectGatedLinear(
-                         cfg,
-                        _child_module.in_features,
-                        _child_module.out_features,
-                        weight,
-                        bias,
-                    )
-
-                    # switch the module
-                    _module._modules[name] = _tmp
-
-                    require_grad_params.extend(
-                        list(_module._modules[name].vida_refine.parameters())
-                    )
-                    _module._modules[name].vida_refine.requires_grad = True
-
-                    require_grad_params.extend(
-                        list(_module._modules[name].compute_vida_route.parameters())
-                    )
-                    _module._modules[name].compute_vida_route.requires_grad = True
-
-                    _module._modules[name].vida_softmax.requires_grad = True
-                    names.append(mo_name)
         if _module.__class__.__name__ in target_replace_norm_module:
             for name, _child_module in list(_module.named_modules()):
                 if _child_module.__class__.__name__ == "LayerNorm" and '.norm' not in name:
-                    print(f"{mo_name}_{name}")
                     if 'block6' in mo_name:
                         print("no adapt")
                         _tmp = ViDAInjectedLNormLayer(
@@ -320,7 +190,6 @@ def inject_trainable_vida(model: nn.Module, cfg):
                         params_name = 'vida_' + mo_name + '_' + name
                         params_name = params_name.replace(".", "_")
                         four_params_name_list = [f'{params_name}_{i}' for i in range(4)]
-                        # print('yes')
                         if params_name not in all_vida_params.keys():
                             vida_list_params = nn.ParameterList(
                                 [nn.Parameter(torch.zeros_like(_child_module.weight)) for i in range(4)])
@@ -371,5 +240,4 @@ def inject_trainable_vida(model: nn.Module, cfg):
                         _module._modules[name].vida_proj2.requires_grad = True
                         _module._modules[name].vida_proj3.requires_grad = True
                         names.append(name)
-
     return model

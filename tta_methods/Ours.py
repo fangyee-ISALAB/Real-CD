@@ -56,93 +56,6 @@ class TTTA(TTAMethod):
             [{"params": self.params[0], "lr": self.cfg.OPTIM.LR, 'weight_decay': self.cfg.OPTIM.WD}, \
              {"params": self.params[1], "lr": self.cfg.TTTA.LR_VIDA, 'weight_decay': self.cfg.TTTA.WD_VIDA}])
 
-    @torch.enable_grad()  # ensure grads in possible no grad context for testing
-    def Original_forward(self, x1, x2):
-        """Forward and adapt model input data.
-               Measure entropy of the model prediction, take gradients, and update params.
-               """
-        self.optimizer.zero_grad()
-        # self.model.Tenc_x2.patch_embed1.register_forward_hook(self.get_activation('patch_embed1'))
-        outputs = self.model(x1, x2)
-        # filtering reliable samples/gradients for further adaptation; first time forward
-        entropys = self.softmax_entropy(outputs[-1])
-        filter_ids_1 = torch.where(entropys < self.margin_e0)
-        entropys = entropys[filter_ids_1]
-        loss = entropys.mean(0)
-        loss.backward()
-
-        self.optimizer.first_step(
-            zero_grad=True)  # compute \hat{\epsilon(\Theta)} for first order approximation, Eqn. (4)
-        entropys2 = self.softmax_entropy(self.model(x1, x2)[-1])
-        entropys2 = entropys2[filter_ids_1]  # second time forward
-        filter_ids_2 = torch.where(
-            entropys2 < self.margin_e0)  # here filtering reliable samples again, since model weights have been changed to \Theta+\hat{\epsilon(\Theta)}
-        loss_second = entropys2[filter_ids_2].mean(0)
-        if not np.isnan(loss_second.item()):
-            self.ema = update_ema(self.ema, loss_second.item())  # record moving average loss values for model recovery
-        # second time backward, update model weights using gradients at \Theta+\hat{\epsilon(\Theta)}
-        loss_second.backward()
-
-        # for nm, param in self.model.named_parameters():
-        #     # if 'compute_vida_route' in nm and 'block4' not in nm:
-        #     if 'vida' in nm and 'block4' not in nm:
-        #         print(nm)
-        #         if param.grad == None:
-        #             print(param.grad)
-        #         else:
-        #             print('yes')
-        # print('================================================================')
-        self.optimizer.second_step(zero_grad=True)
-
-        # perform model recovery
-        print(self.ema)
-        if self.ema is not None:
-            if self.ema < self.reset_constant_em:
-                logger.info(f"ema < {self.reset_constant_em}, now reset the model")
-                self.reset()
-        # print(outputs[-1].shape)
-        return outputs
-
-
-    def flip_norm_loss_ori(self, feature_maps):
-        loss = torch.tensor(0)
-        for i in range(len(feature_maps)):
-            # print(len(feature_maps[i]))
-            x1_norm = feature_maps[i][0]
-            x2_norm = feature_maps[i][1]
-            B, N, C = x1_norm.shape
-
-            x1_norm_noflip = x1_norm[:B//2]
-            x1_norm_flip = x1_norm[B//2:]
-            x2_norm_noflip = x2_norm[:B//2]
-            x2_norm_flip = x2_norm[B//2:]
-
-            H = int(math.sqrt(N))
-            x1_norm_flip = x1_norm_flip.reshape(B//2, H, H, C).permute(0, 3, 1, 2)
-            x2_norm_flip = x2_norm_flip.reshape(B//2, H, H, C).permute(0, 3, 1, 2)
-            x1_norm_flip = flip(x1_norm_flip, -1).permute(0, 2, 3, 1).reshape(B//2, -1, C)
-            x2_norm_flip = flip(x2_norm_flip, -1).permute(0, 2, 3, 1).reshape(B//2, -1, C)
-
-
-            x1_norm_noflip_mean = x1_norm_noflip.mean(-1, keepdim=True)
-            x1_norm_flip_mean = x1_norm_flip.mean(-1, keepdim=True)
-            x2_norm_noflip_mean = x2_norm_noflip.mean(-1, keepdim=True)
-            x2_norm_flip_mean = x2_norm_flip.mean(-1, keepdim=True)
-
-            x1_norm_noflip_std = x1_norm_noflip.std(-1, keepdim=True)
-            x1_norm_flip_std = x1_norm_flip.std(-1, keepdim=True)
-            x2_norm_noflip_std = x2_norm_noflip.std(-1, keepdim=True)
-            x2_norm_flip_std = x2_norm_flip.std(-1, keepdim=True)
-
-            loss_mean = torch.mean(x1_norm_noflip_mean - x1_norm_flip_mean) + torch.mean(
-                x2_norm_noflip_mean - x2_norm_flip_mean)
-            loss_std = torch.mean(x1_norm_noflip_std - x1_norm_flip_std) + torch.mean(
-                x2_norm_noflip_std - x2_norm_flip_std)
-
-        loss = loss + 3*torch.abs(loss_mean)  + 2*torch.abs(loss_std)
-        mean_loss = loss
-        return mean_loss
-
     def flip_norm_loss(self, feature_maps):
         loss = torch.tensor(0)
         for i in range(len(feature_maps)):
@@ -231,9 +144,6 @@ class TTTA(TTAMethod):
         return output_all
 
     def forward_and_adapt(self, x1, x2):
-
-
-        # return self.Original_forward(x1, x2)
         return self.forward_with_CL(x1, x2)
 
     def reset(self):
@@ -281,8 +191,7 @@ class TTTA(TTAMethod):
         for nm, m in self.model.named_modules():
             if 'vida' in nm:
                 m.requires_grad_(True)
-            # if ('.kv' in nm) and isinstance(m, nn.Linear):
-            #     m.requires_grad_(True)
+
             if isinstance(m, nn.BatchNorm2d):
                 m.requires_grad_(True)
                 # force use of batch stats in train and eval modes
@@ -309,8 +218,7 @@ class TTTA(TTAMethod):
 
     def load_some_model_and_optimizer(self):
         self.model.load_state_dict(self.non_router_states, strict=False)
-        # print(self.optimizer_state)
-        # self.optimizer.load_state_dict(self.optimizer_state)
+
 
     def get_non_router_states(self):
         non_router_states = {}
@@ -328,7 +236,6 @@ class SAM(torch.optim.Optimizer):
         defaults = dict(rho=rho, adaptive=adaptive, **kwargs)
         super(SAM, self).__init__(params+params_vida, defaults)
 
-        # self.base_optimizer = base_optimizer(self.param_groups, **kwargs)
         self.base_optimizer = base_optimizer([{"params": params, "lr": cfg.OPTIM.LR, 'weight_decay': cfg.OPTIM.WD, 'adaptive': adaptive, 'rho': rho}, \
                                               {"params": params_vida, "lr": cfg.TTTA.LR_VIDA, 'weight_decay': cfg.TTTA.WD_VIDA, 'adaptive': adaptive,'rho': rho}])
         self.param_groups = self.base_optimizer.param_groups
