@@ -13,7 +13,7 @@ Leyuan Fang, Senior Member, IEEE, Yi Fang, Pedram Ghamisi, Senior Member, IEEE, 
 
 We recommend using a conda environment with Python 3.8 and installing dependencies via `pip`.
 ```bash
-conda create -n realcd python==3.10
+conda create -n realcd python==3.8
 conda activate realcd
 pip install -r requirements.txt
 ```
